@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>隨機網頁相簿</title>
+
+  <style>
+    /* =========================
+       基本設定
+    ========================= */
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: "Microsoft JhengHei", sans-serif;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    /* =========================
+       相簿與主圖片
+    ========================= */
+    .album {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      background: #000;
+    }
+
+    #photo {
+      flex-shrink: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      opacity: 1;
+      transition: opacity 1.2s ease;
+    }
+
+    #photo.fade-out {
+      opacity: 0;
+    }
+
+    /* =========================
+       播放狀態與圖片編號
+    ========================= */
+    #status {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      z-index: 2;
+      transform: translateX(-50%);
+      color: #aaa;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    #photoNumber {
+      position: absolute;
+      bottom: 150px;
+      left: 50%;
+      z-index: 2;
+      transform: translateX(-50%);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+    }
+
+    /* =========================
+       播放間隔設定
+    ========================= */
+    .settings {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 12px;
+      background: rgba(30, 30, 30, 0.7);
+      color: #ccc;
+      font-size: 13px;
+    }
+
+    .settings input {
+      width: 54px;
+      padding: 5px;
+      border: 1px solid #555;
+      border-radius: 5px;
+      background: #222;
+      color: #fff;
+      text-align: center;
+    }
+
+    .settings button {
+      padding: 6px 9px;
+      border: 0;
+      border-radius: 5px;
+      background: #444;
+      color: #fff;
+    }
+
+    .settings button:hover {
+      background: #666;
+    }
+
+    /* =========================
+       暫停／播放按鈕
+    ========================= */
+    .controls {
+      position: absolute;
+      bottom: 95px;
+      left: 0;
+      z-index: 5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      gap: 12px;
+    }
+
+    .circle-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border: 1px solid rgba(255, 255, 255, 0.65);
+      border-radius: 50%;
+      background: rgba(30, 30, 30, 0.75);
+      color: #fff;
+      font-size: 20px;
+      backdrop-filter: blur(8px);
+      transition: background 0.3s;
+    }
+
+    .circle-button:hover {
+      background: rgba(100, 100, 100, 0.8);
+    }
+
+    /* =========================
+       底部縮圖列
+       可置中，超出時可水平捲動
+    ========================= */
+    .thumbnail-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      z-index: 4;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      max-height: 80px;
+      padding: 8px 16px 10px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.92),
+        rgba(0, 0, 0, 0.25)
+      );
+      scrollbar-width: thin;
+      scrollbar-color: #666 #111;
+    }
+
+    /* 這一層負責讓縮圖整列水平置中 */
+    .thumbnail-track {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      width: max-content;
+      min-width: 100%;
+      gap: 9px;
+      margin: 0 auto;
+    }
+
+    .thumbnail {
+      flex: 0 0 76px;
+      height: 52px;
+      padding: 0;
+      overflow: hidden;
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-radius: 7px;
+      background: #171717;
+      opacity: 0.7;
+      transition:
+        opacity 0.2s,
+        border-color 0.2s,
+        transform 0.2s;
+    }
+
+    .thumbnail img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .thumbnail:hover {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
+
+    .thumbnail.active {
+      border-color: #fff;
+      opacity: 1;
+      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4);
+    }
+
+    /* =========================
+       手機版調整
+    ========================= */
+    @media (max-width: 600px) {
+      .settings {
+        top: 12px;
+        right: 10px;
+        gap: 6px;
+        padding: 7px;
+        font-size: 12px;
+      }
+
+      .settings input {
+        width: 42px;
+      }
+
+      #status {
+        top: 65px;
+      }
+
+      .thumbnail-bar {
+        padding-right: 10px;
+        padding-left: 10px;
+      }
+
+      .thumbnail {
+        flex-basis: 64px;
+        height: 46px;
+      }
+
+      .controls {
+        bottom: 82px;
+      }
+
+      #photoNumber {
+        bottom: 137px;
+      }
+    }
+
+    /* 減少動態效果的系統設定 */
+    @media (prefers-reduced-motion: reduce) {
+      #photo,
+      .thumbnail,
+      .circle-button {
+        transition-duration: 0.01ms;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="album">
+    <!-- 主圖片 -->
+    <img id="photo" src="" alt="相簿圖片">
+
+    <!-- 播放狀態與圖片編號 -->
+    <div id="status" aria-live="polite">隨機播放中</div>
+    <div id="photoNumber"></div>
+
+    <!-- 播放間隔設定 -->
+    <section class="settings" aria-label="播放設定">
+      <label for="seconds">間隔秒數</label>
+      <input
+        type="number"
+        id="seconds"
+        value="5"
+        min="1"
+        max="3600"
+        step="1"
+      >
+      <button id="apply" type="button">套用</button>
+    </section>
+
+    <!-- 暫停與重新播放 -->
+    <div class="controls">
+      <button
+        class="circle-button"
+        id="stopButton"
+        type="button"
+        aria-label="暫停播放"
+        title="暫停播放"
+      >Ⅱ</button>
+    </div>
+
+    <!-- 底部縮圖列 -->
+    <nav
+      class="thumbnail-bar"
+      id="thumbnailBar"
+      aria-label="選擇圖片"
+    >
+      <div class="thumbnail-track" id="thumbnailTrack"></div>
+    </nav>
+  </main>
+
+  <script>
+    /* =========================
+       1. 圖片清單
+       新增或刪除圖片時，修改這裡
+    ========================= */
+    const photos = [
+      "images/photo01.jpg",
+      "images/photo02.jpeg",
+      "images/photo03.jpg",
+      "images/photo04.jpg",
+      "images/photo05.jpg",
+      "images/photo06.jpg",
+      "images/photo07.jpg",
+      "images/photo08.jpg",
+      "images/photo09.jpg",
+      "images/photo10.jpg",
+      "images/photo11.jpg",
+      "images/photo12.jpg",
+      "images/photo13.jpg",
+      "images/photo14.jpg",
+      "images/photo15.jpg"
+    ];
+
+    /* =========================
+       2. 取得網頁元素
+    ========================= */
+    const photo = document.getElementById("photo");
+    const photoNumber = document.getElementById("photoNumber");
+    const status = document.getElementById("status");
+    const stopButton = document.getElementById("stopButton");
+    const secondsInput = document.getElementById("seconds");
+    const applyButton = document.getElementById("apply");
+    const thumbnailBar = document.getElementById("thumbnailBar");
+    const thumbnailTrack = document.getElementById("thumbnailTrack");
+
+    /* =========================
+       3. 播放狀態
+    ========================= */
+    const FADE_DURATION = 1200;
+
+    let intervalTime = 5000;
+    let timer = null;
+    let playing = true;
+    let randomList = [];
+    let randomPosition = 0;
+    let currentIndex = -1;
+    let transitionId = 0;
+
+    /* =========================
+       4. 建立底部縮圖
+    ========================= */
+    function buildThumbnails() {
+      const fragment = document.createDocumentFragment();
+
+      photos.forEach((src, index) => {
+        const button = document.createElement("button");
+        button.className = "thumbnail";
+        button.type = "button";
+        button.title = `選擇第 ${index + 1} 張圖片`;
+        button.setAttribute("aria-label", button.title);
+
+        const img = document.createElement("img");
+        img.src = src;
+        img.alt = `第 ${index + 1} 張`;
+
+        button.appendChild(img);
+
+        button.addEventListener("click", () => {
+          showPhoto(index, true);
+        });
+
+        fragment.appendChild(button);
+      });
+
+      thumbnailTrack.appendChild(fragment);
+    }
+
+    /* =========================
+       5. 更新選取的縮圖
+    ========================= */
+    function updateSelectedThumbnail(index) {
+      const thumbnails = thumbnailTrack.children;
+
+      Array.from(thumbnails).forEach((button, i) => {
+        const isActive = i === index;
+
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-current", isActive ? "true" : "false");
+
+        if (isActive) {
+          button.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest",
+            inline: "nearest"
+          });
+        }
+      });
+    }
+
+    /* =========================
+       6. 隨機播放順序
+       每輪播放會重新洗牌
+    ========================= */
+    function shufflePhotos() {
+      randomList = photos.map((_, index) => index);
+
+      for (let i = randomList.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [randomList[i], randomList[j]] = [
+          randomList[j],
+          randomList[i]
+        ];
+      }
+
+      // 避免新一輪第一張與上一張重複
+      if (
+        randomList.length > 1 &&
+        randomList[0] === currentIndex
+      ) {
+        [randomList[0], randomList[1]] = [
+          randomList[1],
+          randomList[0]
+        ];
+      }
+
+      randomPosition = 0;
+    }
+
+    function getNextPhoto() {
+      if (randomPosition >= randomList.length) {
+        shufflePhotos();
+      }
+
+      return randomList[randomPosition++];
+    }
+
+    /* =========================
+       7. 顯示圖片與黑色淡入淡出
+    ========================= */
+    function showPhoto(index, manual = false) {
+      if (index < 0 || index >= photos.length) return;
+
+      clearTimeout(timer);
+
+      // 取消先前尚未完成的切換
+      const thisTransition = ++transitionId;
+
+      // 圖片淡出至黑色
+      photo.classList.add("fade-out");
+
+      timer = setTimeout(() => {
+        if (thisTransition !== transitionId) return;
+
+        photo.onload = () => {
+          if (thisTransition !== transitionId) return;
+
+          currentIndex = index;
+          photoNumber.textContent =
+            `${currentIndex + 1} / ${photos.length}`;
+
+          updateSelectedThumbnail(currentIndex);
+
+          // 下一影格淡入，避免圖片切換時出現閃爍
+          requestAnimationFrame(() => {
+            if (thisTransition !== transitionId) return;
+
+            photo.classList.remove("fade-out");
+
+            if (playing) {
+              timer = setTimeout(loadNextPhoto, intervalTime);
+            }
+          });
+
+          if (manual && playing) {
+            status.textContent = "隨機播放中";
+          }
+        };
+
+        photo.onerror = () => {
+          if (thisTransition !== transitionId) return;
+
+          photo.onload = null;
+          photo.onerror = null;
+
+          status.textContent = `圖片載入失敗：第 ${index + 1} 張`;
+
+          if (playing) {
+            timer = setTimeout(loadNextPhoto, intervalTime);
+          }
+        };
+
+        photo.src = photos[index];
+
+        // 圖片若已在快取中，確保載入完成時仍會更新
+        if (photo.complete && photo.naturalWidth > 0) {
+          photo.onload();
+        }
+      }, FADE_DURATION);
+    }
+
+    /* =========================
+       8. 自動播放
+    ========================= */
+    function loadNextPhoto() {
+      if (!playing || photos.length === 0) return;
+
+      showPhoto(getNextPhoto());
+    }
+
+    function startPlaying() {
+      if (photos.length === 0) {
+        status.textContent = "沒有可播放的圖片";
+        return;
+      }
+
+      clearTimeout(timer);
+      playing = true;
+
+      status.textContent = "隨機播放中";
+      stopButton.textContent = "Ⅱ";
+      stopButton.title = "暫停播放";
+      stopButton.setAttribute("aria-label", "暫停播放");
+
+      shufflePhotos();
+      loadNextPhoto();
+    }
+
+    function stopPlaying() {
+      playing = false;
+      clearTimeout(timer);
+
+      // 讓正在等待的轉場失效，避免暫停後仍自行換圖
+      transitionId++;
+      photo.onload = null;
+      photo.onerror = null;
+      photo.classList.remove("fade-out");
+
+      status.textContent = "播放已暫停";
+      stopButton.textContent = "▶";
+      stopButton.title = "重新開始隨機播放";
+      stopButton.setAttribute("aria-label", "重新開始隨機播放");
+    }
+
+    /* =========================
+       9. 按鈕事件
+    ========================= */
+    stopButton.addEventListener("click", () => {
+      if (playing) {
+        stopPlaying();
+      } else {
+        startPlaying();
+      }
+    });
+
+    function applyInterval() {
+      const seconds = Number(secondsInput.value);
+
+      if (
+        !Number.isFinite(seconds) ||
+        seconds < 1 ||
+        seconds > 3600
+      ) {
+        alert("請輸入 1 到 3600 秒之間的間隔！");
+        return;
+      }
+
+      intervalTime = seconds * 1000;
+
+      if (playing) {
+        startPlaying();
+      }
+    }
+
+    applyButton.addEventListener("click", applyInterval);
+
+    secondsInput.addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        applyInterval();
+      }
+    });
+
+    /* =========================
+       10. 啟動相簿
+    ========================= */
+    buildThumbnails();
+
+    if (photos.length > 0) {
+      shufflePhotos();
+      loadNextPhoto();
+    } else {
+      status.textContent = "沒有可播放的圖片";
+    }
+  </script>
+</body>
+</html>
